@@ -2,8 +2,6 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import * as StellarSdk from "npm:stellar-sdk@13.3.0";
 
-declare const Deno: { env: { get(key: string): string | undefined } };
-
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -27,6 +25,11 @@ const parseJson = (raw: string) => {
 const getPiErrorMessage = (payload: Record<string, unknown>, fallback: string) => {
   const directError = typeof payload.error === "string" ? payload.error.trim() : "";
   if (directError) return directError;
+  if (payload.error && typeof payload.error === "object" && !Array.isArray(payload.error)) {
+    const errorRecord = payload.error as Record<string, unknown>;
+    const errorMsg = typeof errorRecord.message === "string" ? errorRecord.message.trim() : "";
+    if (errorMsg) return errorMsg;
+  }
 
   const directMessage = typeof payload.message === "string" ? payload.message.trim() : "";
   if (directMessage) return directMessage;
@@ -58,6 +61,27 @@ type PiPaymentRecord = Record<string, unknown> & {
 
 const asRecord = (value: unknown): Record<string, unknown> =>
   value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+
+const getEnv = (key: string): string | undefined => {
+  const deno = globalThis as { Deno?: { env?: { get?: (name: string) => string | undefined } } };
+  return deno.Deno?.env?.get?.(key);
+};
+
+const parseIncompletePayments = (data: Record<string, unknown>) => {
+  if (Array.isArray(data)) {
+    return data.map((item) => asRecord(item) as PiPaymentRecord).filter((item) => Boolean(item.identifier));
+  }
+
+  const nested = data.incomplete_server_payments;
+  if (Array.isArray(nested)) {
+    return nested.map((item) => asRecord(item) as PiPaymentRecord).filter((item) => Boolean(item.identifier));
+  }
+
+  const single = asRecord(data.payment);
+  if (single.identifier) return [single as PiPaymentRecord];
+
+  return [] as PiPaymentRecord[];
+};
 
 const submitA2UTx = async (
   payment: PiPaymentRecord,
@@ -116,12 +140,63 @@ const submitA2UTx = async (
   return hash;
 };
 
+const settleIncompleteA2U = async (
+  payment: PiPaymentRecord,
+  apiKey: string,
+) => {
+  const paymentId = String(payment.identifier || "").trim();
+  if (!paymentId) throw new Error("Incomplete payment is missing identifier");
+
+  const completeEndpoint = `https://api.minepi.com/v2/payments/${paymentId}/complete`;
+  const cancelEndpoint = `https://api.minepi.com/v2/payments/${paymentId}/cancel`;
+
+  const explicitTxid = String(payment.transaction?.txid || "").trim();
+  let txidToComplete = explicitTxid;
+
+  if (!txidToComplete && String(payment.direction || "").trim() === "app_to_user") {
+    const walletPrivateSeed = String(getEnv("PI_WALLET_PRIVATE_SEED") || "").trim();
+    if (!walletPrivateSeed) throw new Error("PI_WALLET_PRIVATE_SEED is not configured");
+    const walletPublicAddress = String(getEnv("PI_WALLET_PUBLIC_ADDRESS") || "").trim();
+    txidToComplete = await submitA2UTx(payment, walletPrivateSeed, walletPublicAddress);
+  }
+
+  if (txidToComplete) {
+    const completeResponse = await fetch(completeEndpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Key ${apiKey}`,
+      },
+      body: JSON.stringify({ txid: txidToComplete }),
+    });
+    const completeData = parseJson(await completeResponse.text());
+    if (!completeResponse.ok) {
+      const fallback = `Failed to complete incomplete payment (status ${completeResponse.status})`;
+      throw new Error(getPiErrorMessage(completeData, fallback));
+    }
+    return;
+  }
+
+  const cancelResponse = await fetch(cancelEndpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Key ${apiKey}`,
+    },
+  });
+  const cancelData = parseJson(await cancelResponse.text());
+  if (!cancelResponse.ok) {
+    const fallback = `Failed to cancel incomplete payment (status ${cancelResponse.status})`;
+    throw new Error(getPiErrorMessage(cancelData, fallback));
+  }
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseUrl = getEnv("SUPABASE_URL")!;
+    const supabaseServiceKey = getEnv("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const { action, paymentId, txid, accessToken, adId, payment } = await req.json();
@@ -167,7 +242,7 @@ serve(async (req) => {
     const { data: { user }, error: userError } = await supabase.auth.getUser(token);
     if (userError || !user) return jsonResponse({ error: "Unauthorized" }, 401);
 
-    const apiKey = Deno.env.get("PI_API_KEY");
+    const apiKey = getEnv("PI_API_KEY");
     if (!apiKey) return jsonResponse({ error: "PI_API_KEY is not configured" }, 500);
 
     if (action === "ad_verify") {
@@ -196,9 +271,9 @@ serve(async (req) => {
 
     if (action === "a2u_config_status") {
       const hasApiKey = Boolean(apiKey);
-      const hasValidationKey = Boolean(Deno.env.get("PI_VALIDATION_KEY"));
-      const hasWalletPrivateSeed = Boolean(Deno.env.get("PI_WALLET_PRIVATE_SEED"));
-      const hasWalletPublicAddress = Boolean(Deno.env.get("PI_WALLET_PUBLIC_ADDRESS"));
+      const hasValidationKey = Boolean(getEnv("PI_VALIDATION_KEY"));
+      const hasWalletPrivateSeed = Boolean(getEnv("PI_WALLET_PRIVATE_SEED"));
+      const hasWalletPublicAddress = Boolean(getEnv("PI_WALLET_PUBLIC_ADDRESS"));
       return jsonResponse({
         success: true,
         data: {
@@ -233,7 +308,7 @@ serve(async (req) => {
         return jsonResponse({ error: "Missing payment.metadata object" }, 400);
       }
 
-      // Pi allows one incomplete A2U payment at a time per app key.
+      // Pi allows only one ongoing server payment. Resolve it first (pinetwork-style flow).
       const pendingResponse = await fetch("https://api.minepi.com/v2/payments/incomplete_server_payments", {
         method: "GET",
         headers: {
@@ -242,24 +317,15 @@ serve(async (req) => {
       });
       const pendingData = parseJson(await pendingResponse.text());
       if (pendingResponse.ok) {
-        const pendingList = Array.isArray(pendingData.incomplete_server_payments)
-          ? pendingData.incomplete_server_payments
-          : [];
+        const pendingList = parseIncompletePayments(pendingData);
         if (pendingList.length > 0) {
-          const pendingPayment = asRecord(pendingList[0]) as PiPaymentRecord;
-          const pendingUid = String(pendingPayment.user_uid || "").trim();
-          if (pendingUid && pendingUid !== uid) {
-            return jsonResponse(
-              { error: "Another incomplete A2U payout exists. Complete/cancel it before creating a new payout." },
-              409,
-            );
+          const pendingPayment = pendingList[0];
+          try {
+            await settleIncompleteA2U(pendingPayment, apiKey);
+          } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : "Unable to settle incomplete payment";
+            return jsonResponse({ error: message }, 409);
           }
-
-          return jsonResponse({
-            success: true,
-            data: pendingPayment,
-            reusedIncomplete: true,
-          });
         }
       }
 
@@ -335,12 +401,12 @@ serve(async (req) => {
         if (existingTxid) {
           body = { txid: existingTxid };
         } else if (String(paymentData.direction || "").trim() === "app_to_user") {
-          const walletPrivateSeed = String(Deno.env.get("PI_WALLET_PRIVATE_SEED") || "").trim();
+          const walletPrivateSeed = String(getEnv("PI_WALLET_PRIVATE_SEED") || "").trim();
           if (!walletPrivateSeed) {
             return jsonResponse({ error: "PI_WALLET_PRIVATE_SEED is not configured" }, 500);
           }
 
-          const walletPublicAddress = String(Deno.env.get("PI_WALLET_PUBLIC_ADDRESS") || "").trim();
+          const walletPublicAddress = String(getEnv("PI_WALLET_PUBLIC_ADDRESS") || "").trim();
           const submittedTxid = await submitA2UTx(paymentData, walletPrivateSeed, walletPublicAddress);
           body = { txid: submittedTxid };
         }
