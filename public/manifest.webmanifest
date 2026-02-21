@@ -1,0 +1,24 @@
+{
+  "name": "OpenPay",
+  "short_name": "OpenPay",
+  "description": "OpenPay is a simple, secure wallet for everyday payments.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0b4abf",
+  "icons": [
+    {
+      "src": "/openpay-o.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/openpay-o.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

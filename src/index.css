@@ -1,0 +1,137 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 212 63% 97%;
+    --foreground: 218 48% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 218 48% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 218 48% 15%;
+
+    --primary: 220 89% 35%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 210 100% 96%;
+    --secondary-foreground: 220 89% 35%;
+
+    --muted: 210 40% 95%;
+    --muted-foreground: 215 16% 44%;
+
+    --accent: 210 100% 96%;
+    --accent-foreground: 220 89% 35%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 214 38% 89%;
+    --input: 214 38% 89%;
+    --ring: 220 89% 35%;
+
+    --radius: 1rem;
+
+    --paypal-blue: 220 89% 35%;
+    --paypal-light-blue: 200 100% 47%;
+    --paypal-dark: 218 49% 12%;
+    --paypal-success: 153 70% 37%;
+
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  .dark {
+    --background: 222 38% 10%;
+    --foreground: 210 40% 96%;
+
+    --card: 222 32% 13%;
+    --card-foreground: 210 40% 96%;
+
+    --popover: 222 32% 13%;
+    --popover-foreground: 210 40% 96%;
+
+    --primary: 218 92% 62%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 222 22% 18%;
+    --secondary-foreground: 210 40% 96%;
+
+    --muted: 222 22% 18%;
+    --muted-foreground: 215 20% 72%;
+
+    --accent: 222 22% 18%;
+    --accent-foreground: 210 40% 96%;
+
+    --destructive: 0 75% 52%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 217 20% 24%;
+    --input: 217 20% 24%;
+    --ring: 218 92% 62%;
+
+    --paypal-blue: 218 92% 62%;
+    --paypal-light-blue: 199 100% 58%;
+    --paypal-dark: 210 40% 96%;
+    --paypal-success: 153 65% 45%;
+
+    --sidebar-background: 222 32% 12%;
+    --sidebar-foreground: 210 40% 96%;
+    --sidebar-primary: 218 92% 62%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 222 22% 18%;
+    --sidebar-accent-foreground: 210 40% 96%;
+    --sidebar-border: 217 20% 24%;
+    --sidebar-ring: 218 92% 62%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: "Avenir Next", "Segoe UI", Arial, sans-serif;
+    background-image: radial-gradient(circle at 20% -10%, hsl(201 100% 92%) 0%, hsl(212 63% 97%) 35%);
+    min-height: 100vh;
+  }
+
+  .dark body {
+    background-image: radial-gradient(circle at 20% -10%, hsl(219 56% 24%) 0%, hsl(222 38% 10%) 45%);
+  }
+}
+
+@layer utilities {
+  .paypal-surface {
+    @apply bg-card/95 backdrop-blur-sm border border-white/60 shadow-sm;
+  }
+
+  .paypal-pill {
+    @apply rounded-full px-5 py-3 font-semibold;
+  }
+
+  .paypal-heading {
+    @apply text-2xl font-bold tracking-tight text-paypal-dark;
+  }
+}
+
+/* Keep Google Translate UI invisible while preserving full-page translation. */
+.skiptranslate {
+  display: none !important;
+}
+body {
+  top: 0 !important;
+}
+
+.dark .bg-white {
+  background-color: hsl(var(--card)) !important;
+}
