@@ -212,14 +212,11 @@ const PiAuthPage = () => {
 
         const { error: profileSyncError } = await supabase
           .from("profiles")
-          .upsert(
-            {
-              id: user.id,
-              full_name: preferredName,
-              username: preferredUsername,
-            },
-            { onConflict: "id" },
-          );
+          .update({
+            full_name: preferredName,
+            username: preferredUsername,
+          })
+          .eq("id", user.id);
         if (profileSyncError) {
           toast.error(profileSyncError.message || "Pi linked, but profile sync failed");
         }

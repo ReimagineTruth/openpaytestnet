@@ -82,17 +82,18 @@ const ReceivePage = () => {
       const existingUsername = normalizeUsername(existingProfile?.username || "");
       const needsProfileHeal = !existingProfile || !existingName || !existingUsername;
 
-      if (needsProfileHeal) {
+      if (needsProfileHeal && existingProfile) {
         const healedName = existingName || fallbackName;
         const healedUsername = existingUsername || fallbackUsername || `openpay_${user.id.slice(0, 6)}`;
-        await supabase.from("profiles").upsert(
+        await supabase
+          .from("profiles")
+          .update(
           {
-            id: user.id,
             full_name: healedName,
             username: healedUsername,
           },
-          { onConflict: "id" },
-        );
+        )
+          .eq("id", user.id);
       }
 
       const { data: profileRow } = await supabase
