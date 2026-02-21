@@ -16,6 +16,14 @@ interface SelfProfile {
   avatar_url: string | null;
 }
 
+const normalizeUsername = (value: string | null | undefined) =>
+  String(value || "")
+    .trim()
+    .replace(/^@+/, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9_]/g, "")
+    .slice(0, 20);
+
 const ReceivePage = () => {
   const navigate = useNavigate();
   const { currencies, currency } = useCurrency();
@@ -44,14 +52,65 @@ const ReceivePage = () => {
       }
       setUserId(user.id);
 
-      const { data } = await supabase
+      const fallbackName = String(
+        user.user_metadata?.full_name ||
+          user.user_metadata?.pi_username ||
+          user.email?.split("@")[0] ||
+          "OpenPay User",
+      )
+        .trim()
+        .slice(0, 80);
+      const fallbackUsername = normalizeUsername(
+        user.user_metadata?.username || user.user_metadata?.pi_username || user.email?.split("@")[0] || "",
+      );
+      const fallbackProfile: SelfProfile = {
+        id: user.id,
+        full_name: fallbackName || "OpenPay User",
+        username: fallbackUsername || null,
+        avatar_url: null,
+      };
+      setProfile(fallbackProfile);
+      if (fallbackProfile.username) setStoreMerchantUsername(fallbackProfile.username);
+
+      const { data: existingProfile } = await supabase
         .from("profiles")
         .select("id, full_name, username, avatar_url")
         .eq("id", user.id)
-        .single();
+        .maybeSingle();
 
-      setProfile(data || null);
-      if (data?.username) setStoreMerchantUsername(data.username);
+      const existingName = String(existingProfile?.full_name || "").trim();
+      const existingUsername = normalizeUsername(existingProfile?.username || "");
+      const needsProfileHeal = !existingProfile || !existingName || !existingUsername;
+
+      if (needsProfileHeal) {
+        const healedName = existingName || fallbackName;
+        const healedUsername = existingUsername || fallbackUsername || `openpay_${user.id.slice(0, 6)}`;
+        await supabase.from("profiles").upsert(
+          {
+            id: user.id,
+            full_name: healedName,
+            username: healedUsername,
+          },
+          { onConflict: "id" },
+        );
+      }
+
+      const { data: profileRow } = await supabase
+        .from("profiles")
+        .select("id, full_name, username, avatar_url")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      const finalProfile = profileRow || existingProfile;
+      const resolvedProfile: SelfProfile = {
+        id: user.id,
+        full_name: String(finalProfile?.full_name || fallbackProfile.full_name).trim() || "OpenPay User",
+        username: normalizeUsername(finalProfile?.username || fallbackProfile.username || "") || null,
+        avatar_url: finalProfile?.avatar_url || fallbackProfile.avatar_url || null,
+      };
+      setProfile(resolvedProfile);
+      if (resolvedProfile.username) setStoreMerchantUsername(resolvedProfile.username);
+      await supabase.rpc("upsert_my_user_account");
 
       try {
         const prefs = await loadUserPreferences(user.id);

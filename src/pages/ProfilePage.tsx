@@ -38,7 +38,7 @@ const ProfilePage = () => {
         .from("profiles")
         .select("full_name, username, avatar_url")
         .eq("id", user.id)
-        .single();
+        .maybeSingle();
 
       setFullName(profile?.full_name || "");
       setUsername(profile?.username || "");

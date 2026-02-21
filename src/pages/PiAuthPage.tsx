@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import BrandLogo from "@/components/BrandLogo";
 import { supabase } from "@/integrations/supabase/client";
 import { setAppCookie } from "@/lib/userPreferences";
+import { getFunctionErrorMessage } from "@/lib/supabaseFunctionError";
 
 const PiAuthPage = () => {
   const [piUser, setPiUser] = useState<{ uid: string; username: string } | null>(null);
@@ -16,9 +17,46 @@ const PiAuthPage = () => {
   const sdkReady = typeof window !== "undefined" && !!window.Pi;
   const sandbox = String(import.meta.env.VITE_PI_SANDBOX || "false").toLowerCase() === "true";
 
+  const normalizeUsername = (value: string) =>
+    value
+      .trim()
+      .toLowerCase()
+      .replace(/^@+/, "")
+      .replace(/[^a-z0-9_]/g, "")
+      .slice(0, 20);
+
+  const resolveUniqueUsername = async (baseValue: string, userId: string) => {
+    const safeBase = normalizeUsername(baseValue) || `pi_${userId.replace(/-/g, "").slice(0, 12)}`;
+    const minBase = safeBase.length < 3 ? `${safeBase}${"x".repeat(3 - safeBase.length)}` : safeBase;
+
+    for (let index = 0; index < 6; index += 1) {
+      const suffix = index === 0 ? "" : `_${index}`;
+      const maxBaseLength = Math.max(3, 20 - suffix.length);
+      const candidate = `${minBase.slice(0, maxBaseLength)}${suffix}`;
+      const { data: existing, error } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("username", candidate)
+        .neq("id", userId)
+        .maybeSingle();
+
+      if (error) break;
+      if (!existing) return candidate;
+    }
+
+    return `${minBase.slice(0, 15)}_${userId.replace(/-/g, "").slice(0, 4)}`;
+  };
+
   const initPi = () => {
+    const inPiBrowser =
+      typeof navigator !== "undefined" &&
+      /pi\s?browser/i.test(navigator.userAgent || "");
     if (!window.Pi) {
       toast.error("Pi SDK not loaded");
+      return false;
+    }
+    if (!inPiBrowser) {
+      toast.error("Open this page in Pi Browser to continue");
       return false;
     }
     window.Pi.init({ version: "2.0", sandbox });
@@ -28,12 +66,15 @@ const PiAuthPage = () => {
   useEffect(() => {
     const checkSession = async () => {
       const { data } = await supabase.auth.getSession();
-      if (data.session) {
+      const hasIncomingAuthCode = Boolean(
+        (searchParams.get("auth_code") || searchParams.get("openpay_code") || searchParams.get("code") || "").trim(),
+      );
+      if (data.session && !hasIncomingAuthCode) {
         navigate("/dashboard", { replace: true });
       }
     };
     checkSession();
-  }, [navigate]);
+  }, [navigate, searchParams]);
 
   useEffect(() => {
     const ref = (searchParams.get("ref") || "").trim().toLowerCase();
@@ -66,7 +107,7 @@ const PiAuthPage = () => {
     };
 
     const firstSignIn = await doSignIn();
-    if (!firstSignIn.error && firstSignIn.session) return;
+    if (!firstSignIn.error && firstSignIn.session) return { created };
 
     const firstSignInMessage = firstSignIn.error?.message?.toLowerCase() || "";
     const accountMissing =
@@ -106,20 +147,13 @@ const PiAuthPage = () => {
   };
 
   const verifyPiAccessToken = async (accessToken: string) => {
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-
-    const res = await fetch(`${supabaseUrl}/functions/v1/pi-platform`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "apikey": supabaseAnonKey,
-      },
-      body: JSON.stringify({ action: "auth_verify", accessToken }),
+    const { data, error } = await supabase.functions.invoke("pi-platform", {
+      body: { action: "auth_verify", accessToken },
     });
+    if (error) throw new Error(await getFunctionErrorMessage(error, "Pi auth verification failed"));
 
-    const payload = await res.json();
-    if (!res.ok || !payload?.success || !payload.data?.uid) {
+    const payload = data as { success?: boolean; data?: { uid?: string; username?: string }; error?: string } | null;
+    if (!payload?.success || !payload.data?.uid) {
       throw new Error(payload?.error || "Pi auth verification failed");
     }
 
@@ -139,6 +173,8 @@ const PiAuthPage = () => {
       const auth = await window.Pi.authenticate(["username"]);
       const verified = await verifyPiAccessToken(auth.accessToken);
       const username = verified.username || auth.user.username;
+      setAppCookie("openpay_last_pi_uid", verified.uid);
+      setAppCookie("openpay_last_pi_username", username);
 
       const signInResult = await signInPiBackedAccount(verified.uid, username, referralCode || undefined);
 
@@ -163,13 +199,43 @@ const PiAuthPage = () => {
           .from("profiles")
           .select("full_name, username")
           .eq("id", user.id)
-          .single();
+          .maybeSingle();
+
+        const existingName = String(profile?.full_name || "").trim();
+        const existingUsername = String(profile?.username || "").trim().toLowerCase();
+        const shouldRefreshUsername =
+          !existingUsername ||
+          existingUsername.startsWith("pi_") ||
+          !/^[a-z0-9_]{3,20}$/.test(existingUsername);
+        const preferredUsername = shouldRefreshUsername
+          ? await resolveUniqueUsername(username || verified.uid, user.id)
+          : existingUsername;
+        const preferredName = existingName || username || `Pi User ${verified.uid.slice(-6)}`;
+
+        const { error: profileSyncError } = await supabase
+          .from("profiles")
+          .upsert(
+            {
+              id: user.id,
+              full_name: preferredName,
+              username: preferredUsername,
+            },
+            { onConflict: "id" },
+          );
+        if (profileSyncError) {
+          toast.error(profileSyncError.message || "Pi linked, but profile sync failed");
+        }
+
+        const { error: accountSyncError } = await supabase.rpc("upsert_my_user_account");
+        if (accountSyncError) {
+          toast.error(accountSyncError.message || "Pi linked, but account sync failed");
+        }
 
         const needsProfileSetup =
           Boolean(signInResult?.created) ||
-          !profile?.full_name?.trim() ||
-          !profile?.username?.trim() ||
-          profile.username.startsWith("pi_");
+          !preferredName.trim() ||
+          !preferredUsername.trim() ||
+          preferredUsername.startsWith("pi_");
 
         if (needsProfileSetup) {
           toast.message("Set up your profile to continue");
@@ -178,7 +244,7 @@ const PiAuthPage = () => {
         }
 
         if (expectedCode) {
-          const { data: isMatch, error: verifyError } = await (supabase as any).rpc(
+          const { data: isMatch, error: verifyError } = await supabase.rpc(
             "verify_my_openpay_authorization_code",
             { p_code: expectedCode }
           );

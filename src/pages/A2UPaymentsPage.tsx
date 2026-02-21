@@ -4,7 +4,9 @@ import { ArrowLeft, HandCoins } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { getFunctionErrorMessage } from "@/lib/supabaseFunctionError";
+import { getAppCookie } from "@/lib/userPreferences";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import BottomNav from "@/components/BottomNav";
 
@@ -51,7 +53,8 @@ const A2UPaymentsPage = () => {
         ]);
 
         const piUid = String(userResult.user?.user_metadata?.pi_uid || "").trim();
-        if (piUid) setReceiverUid(piUid);
+        const cachedPiUid = String(getAppCookie("openpay_last_pi_uid") || "").trim();
+        if (piUid || cachedPiUid) setReceiverUid(piUid || cachedPiUid);
 
         const status = (configPayload.data || {}) as {
           hasApiKey?: boolean;
@@ -193,15 +196,28 @@ const A2UPaymentsPage = () => {
 
       <Dialog open={showPayoutModal} onOpenChange={setShowPayoutModal}>
         <DialogContent className="rounded-[32px] border-0 bg-[#f5f5f7] p-6 sm:max-w-[520px]">
-          <DialogTitle className="text-5xl font-bold text-paypal-dark">Testnet Payouts</DialogTitle>
+          <DialogTitle className="text-4xl font-bold text-paypal-dark sm:text-5xl">Testnet Payouts</DialogTitle>
           <DialogDescription className="pt-1 text-base text-slate-500">
             Click the button below to receive a 0.01 Pi app-to-user payout to your testnet Pi wallet. You must be
             authenticated in Pi Browser to continue.
           </DialogDescription>
 
+          <div>
+            <p className="mb-2 text-sm font-semibold text-slate-700">Pi UID (receiver)</p>
+            <Input
+              value={receiverUid}
+              onChange={(e) => setReceiverUid(e.target.value)}
+              placeholder="Paste Pi UID"
+              className="h-11 rounded-xl bg-white"
+            />
+            <p className="mt-2 text-xs text-slate-500">
+              Auto-filled from your linked Pi account. You can paste it manually if needed.
+            </p>
+          </div>
+
           <Button
             type="button"
-            className="h-14 w-full rounded-2xl bg-paypal-blue text-3xl font-bold text-white hover:bg-[#004dc5]"
+            className="h-14 w-full whitespace-normal rounded-2xl bg-paypal-blue px-4 text-center text-lg font-bold text-white hover:bg-[#004dc5] sm:text-2xl"
             disabled={loading || !configReady}
             onClick={handleRequestPayout}
           >
@@ -237,7 +253,7 @@ const A2UPaymentsPage = () => {
 
           <Button
             type="button"
-            className="h-14 w-full rounded-2xl bg-paypal-blue text-3xl font-bold text-white hover:bg-[#004dc5]"
+            className="h-14 w-full rounded-2xl bg-paypal-blue text-2xl font-bold text-white hover:bg-[#004dc5] sm:text-3xl"
             onClick={() => setShowPayoutModal(false)}
           >
             Close

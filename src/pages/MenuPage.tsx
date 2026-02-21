@@ -44,7 +44,7 @@ const MenuPage = () => {
         .from("profiles")
         .select("username")
         .eq("id", user.id)
-        .single();
+        .maybeSingle();
       const normalizedUsername = String(profile?.username || "")
         .trim()
         .toLowerCase()
@@ -58,7 +58,7 @@ const MenuPage = () => {
         .from("wallets")
         .select("welcome_bonus_claimed_at")
         .eq("user_id", user.id)
-        .single();
+        .maybeSingle();
       setWelcomeClaimedAt(wallet?.welcome_bonus_claimed_at || null);
     };
     loadWelcomeStatus();
@@ -109,7 +109,7 @@ const MenuPage = () => {
       .from("wallets")
       .select("welcome_bonus_claimed_at")
       .eq("user_id", user.id)
-      .single();
+      .maybeSingle();
     setWelcomeClaimedAt(wallet?.welcome_bonus_claimed_at || null);
   };
 

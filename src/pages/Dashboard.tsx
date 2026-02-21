@@ -316,7 +316,7 @@ const Dashboard = () => {
         .from("profiles")
         .select("full_name, username, referral_code")
         .eq("id", user.id)
-        .single();
+        .maybeSingle();
       setUserName(profile?.full_name || "");
       setUsername(profile?.username || null);
       if (!loanApplicantName && profile?.full_name) setLoanApplicantName(profile.full_name);
@@ -329,7 +329,7 @@ const Dashboard = () => {
         .from("wallets")
         .select("balance")
         .eq("user_id", user.id)
-        .single();
+        .maybeSingle();
       setBalance(wallet?.balance || 0);
 
       const { data: accountData } = await supabase.rpc("upsert_my_user_account");
@@ -381,7 +381,7 @@ const Dashboard = () => {
               .from("profiles")
               .select("full_name, username, avatar_url")
               .eq("id", otherId)
-              .single();
+              .maybeSingle();
             return {
               ...tx,
               other_name: p?.full_name || "Unknown",

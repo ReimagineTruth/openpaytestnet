@@ -77,7 +77,12 @@ const isOpenPayQrCode = (rawValue: string) => {
     }
 
     if (protocol === "http:" || protocol === "https:") {
-      const isOpenPayDomain = host.includes("openpay");
+      const currentHost = typeof window !== "undefined" ? window.location.hostname.toLowerCase() : "";
+      const allowedHosts = String(import.meta.env.VITE_OPENPAY_ALLOWED_QR_HOSTS || "")
+        .split(",")
+        .map((item) => item.trim().toLowerCase())
+        .filter(Boolean);
+      const isOpenPayDomain = host.includes("openpay") || host === currentHost || allowedHosts.includes(host);
       const isPayPath = path.startsWith("/send") || path.startsWith("/pay");
       return hasRecipient && isPayPath && isOpenPayDomain;
     }
@@ -235,7 +240,7 @@ const QrScannerPage = () => {
       const scanner = new Html5Qrcode("openpay-full-scanner", {
         useBarCodeDetectorIfSupported: false,
         verbose: false,
-      } as any);
+      });
       scannerRef.current = scanner;
 
       try {

@@ -88,7 +88,13 @@ const TopUp = () => {
   }, [searchParams]);
 
   const initPi = () => {
+    const inPiBrowser =
+      typeof navigator !== "undefined" &&
+      /pi\s?browser/i.test(navigator.userAgent || "");
     if (!window.Pi) {
+      return false;
+    }
+    if (!inPiBrowser) {
       return false;
     }
     window.Pi.init({ version: "2.0", sandbox });
