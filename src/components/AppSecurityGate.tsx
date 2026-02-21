@@ -9,6 +9,7 @@ import {
   hasAnyAppSecurityMethod,
   isAppSecurityUnlocked,
   loadAppSecuritySettings,
+  saveAppSecuritySettings,
   markAppSecurityUnlocked,
   hashSecret,
   verifyBiometricCredential,

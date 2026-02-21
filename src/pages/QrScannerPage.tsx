@@ -234,7 +234,8 @@ const QrScannerPage = () => {
 
       const scanner = new Html5Qrcode("openpay-full-scanner", {
         useBarCodeDetectorIfSupported: false,
-      });
+        verbose: false,
+      } as any);
       scannerRef.current = scanner;
 
       try {

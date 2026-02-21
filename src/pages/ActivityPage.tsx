@@ -165,7 +165,7 @@ const ActivityPage = () => {
           <div className="mt-2 space-y-2">
             {merchantActivities.slice(0, 6).map((row) => (
               <div key={row.activity_id} className="rounded-xl border border-border px-3 py-2">
-                <p className="text-sm font-medium text-foreground">{row.activity_type.replaceAll("_", " ")}</p>
+                <p className="text-sm font-medium text-foreground">{row.activity_type.split("_").join(" ")}</p>
                 <p className="text-xs text-muted-foreground">
                   {row.currency} {row.amount.toFixed(2)} · {row.status} · {row.source}
                 </p>

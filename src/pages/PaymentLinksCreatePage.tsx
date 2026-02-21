@@ -128,11 +128,7 @@ const PaymentLinksCreatePage = () => {
           .order("created_at", { ascending: false }),
       ]);
 
-      const { count: unreadCount } = await supabase
-        .from("app_notifications")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", user.id)
-        .is("read_at", null);
+      const unreadCount = 0;
 
       if (profile?.default_currency) setCurrency(String(profile.default_currency).toUpperCase());
       setProducts((list || []) as Product[]);

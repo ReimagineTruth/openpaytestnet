@@ -566,7 +566,7 @@ const MerchantOnboardingPage = () => {
               <div className="mt-3 space-y-2">
                 {merchantActivity.slice(0, 5).map((row) => (
                   <div key={row.activity_id} className="rounded-lg border border-border px-3 py-2">
-                    <p className="text-sm font-medium text-foreground">{row.activity_type.replaceAll("_", " ")}</p>
+                    <p className="text-sm font-medium text-foreground">{row.activity_type.split("_").join(" ")}</p>
                     {!!row.counterparty_email && <p className="text-xs text-muted-foreground">{row.counterparty_email}</p>}
                     <p className="text-xs text-muted-foreground">
                       {getPiCodeLabel((row.currency || defaultCurrency).toUpperCase())} {Number(row.amount || 0).toFixed(2)} · {row.source}
@@ -851,7 +851,7 @@ const MerchantOnboardingPage = () => {
               {merchantActivity.slice(0, 12).map((row) => (
                 <div key={row.activity_id} className="rounded-lg border border-border px-3 py-2">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium text-foreground">{row.activity_type.replaceAll("_", " ")}</p>
+                    <p className="text-sm font-medium text-foreground">{row.activity_type.split("_").join(" ")}</p>
                     {!!row.counterparty_email && <p className="text-xs text-muted-foreground">{row.counterparty_email}</p>}
                     <p className="text-xs text-muted-foreground">{new Date(row.created_at).toLocaleString()}</p>
                   </div>
