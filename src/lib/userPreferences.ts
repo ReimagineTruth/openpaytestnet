@@ -70,7 +70,7 @@ export const upsertUserPreferences = async (
 
   const { error } = await supabase
     .from("user_preferences")
-    .upsert(payload, { onConflict: "user_id" });
+    .upsert(payload as any, { onConflict: "user_id" });
 
   if (error) throw error;
 };

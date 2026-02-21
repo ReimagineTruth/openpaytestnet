@@ -51,12 +51,7 @@ const NotificationsPage = () => {
           .eq("user_id", user.id)
           .order("created_at", { ascending: false })
           .limit(5),
-        supabase
-          .from("app_notifications")
-          .select("id, type, title, body, created_at")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false })
-          .limit(15),
+        Promise.resolve({ data: [] as any[], error: null }),
       ]);
 
       const notifications: NotificationItem[] = [];

@@ -105,12 +105,7 @@ const VirtualCardPage = () => {
           .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
           .order("created_at", { ascending: false })
           .limit(120),
-        supabase
-          .from("app_notifications")
-          .select("id", { count: "exact", head: true })
-          .eq("user_id", user.id)
-          .is("read_at", null)
-          .in("type", ["virtual_card_payment_sent"]),
+        Promise.resolve({ count: 0, error: null }),
       ]);
 
       const vcRows = (txRows || []).filter((tx: any) => isVirtualCardPaymentNote(tx.note));

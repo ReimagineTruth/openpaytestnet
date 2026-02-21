@@ -217,7 +217,7 @@ export const verifyBiometricCredential = async (credentialId: string) => {
     challenge,
     timeout: 60_000,
     userVerification: "required",
-    allowCredentials: [{ type: "public-key", id: idBytes, transports: ["internal"] }],
+    allowCredentials: [{ type: "public-key", id: idBytes as BufferSource, transports: ["internal"] }],
   };
 
   let assertion: Credential | null = null;

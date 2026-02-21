@@ -233,7 +233,8 @@ const RequestMoney = () => {
 
       scanner = new Html5Qrcode("openpay-receive-scanner", {
         useBarCodeDetectorIfSupported: false,
-      });
+        verbose: false,
+      } as any);
       const onDecoded = async (decodedText: string) => {
         if (isDone) return;
         isDone = true;
