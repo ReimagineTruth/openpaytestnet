@@ -1,0 +1,26 @@
+﻿# OpenPay Pi Platform token metadata
+# Served at: https://openpaytestnet.vercel.app/.well-known/pi.toml
+
+[[CURRENCIES]]
+code="OpenPay"
+issuer="GD73RJKPYUGCDYI5OBVXQOHTXPXKZRMHTTXHBURAPYMTKIRC7WKEA6VO"
+home_domain="openpaytestnet.vercel.app"
+name="OpenPay Team"
+desc="This is a test token that is created as an example and has no value yet in testnet."
+image="https://i.ibb.co/GQMc6QRC/photo-2026-02-19-16-10-11.jpg"
+status="live"
+display_decimals=3
+anchor_asset_type="fiat"
+anchor_asset="OpenPay"
+redeem_instructions="Contact OpenPay Team"
+is_unlimited=true
+amount="14019432151.014"
+
+[DOCUMENTATION]
+ORG_NAME="OpenPay Team"
+ORG_URL="https://openpaytestnet.vercel.app"
+ORG_DESCRIPTION="OpenPay testnet token issuer metadata"
+ORG_LOGO="https://i.ibb.co/GQMc6QRC/photo-2026-02-19-16-10-11.jpg"
+
+[_links.toml]
+href="https://openpaytestnet.vercel.app/.well-known/pi.toml"

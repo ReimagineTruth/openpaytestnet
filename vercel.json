@@ -1,4 +1,15 @@
 {
+  "headers": [
+    {
+      "source": "/.well-known/pi.toml",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "text/plain; charset=utf-8"
+        }
+      ]
+    }
+  ],
   "rewrites": [
     {
       "source": "/((?!.*\\.).*)",

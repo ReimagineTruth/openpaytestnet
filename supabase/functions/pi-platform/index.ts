@@ -1,5 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import * as StellarSdk from "npm:stellar-sdk@13.3.0";
+
+declare const Deno: { env: { get(key: string): string | undefined } };
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -38,6 +41,79 @@ const getPiErrorMessage = (payload: Record<string, unknown>, fallback: string) =
   }
 
   return fallback;
+};
+
+type PiPaymentRecord = Record<string, unknown> & {
+  identifier?: string;
+  amount?: number | string;
+  memo?: string;
+  metadata?: Record<string, unknown>;
+  user_uid?: string;
+  from_address?: string;
+  to_address?: string;
+  direction?: string;
+  network?: string;
+  transaction?: { txid?: string; _link?: string } | null;
+};
+
+const asRecord = (value: unknown): Record<string, unknown> =>
+  value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+
+const submitA2UTx = async (
+  payment: PiPaymentRecord,
+  walletPrivateSeed: string,
+  expectedPublicAddress?: string,
+) => {
+  const paymentId = String(payment.identifier || "").trim();
+  const toAddress = String(payment.to_address || "").trim();
+  const fromAddress = String(payment.from_address || "").trim();
+  const networkPassphrase = String(payment.network || "").trim() || "Pi Testnet";
+  const amountNumber = Number(payment.amount);
+
+  if (!paymentId) throw new Error("Missing payment identifier for blockchain submission");
+  if (!toAddress) throw new Error("Missing payment recipient address");
+  if (!fromAddress) throw new Error("Missing payment sender address");
+  if (!Number.isFinite(amountNumber) || amountNumber <= 0) throw new Error("Invalid payment amount");
+
+  const keypair = StellarSdk.Keypair.fromSecret(walletPrivateSeed);
+  const signerAddress = keypair.publicKey();
+  const expectedAddress = String(expectedPublicAddress || "").trim();
+  if (expectedAddress && signerAddress !== expectedAddress) {
+    throw new Error("PI_WALLET_PRIVATE_SEED does not match PI_WALLET_PUBLIC_ADDRESS");
+  }
+  if (fromAddress !== signerAddress) {
+    throw new Error("Payment source address does not match the configured wallet seed");
+  }
+
+  const horizonUrl = networkPassphrase === "Pi Network"
+    ? "https://api.mainnet.minepi.com"
+    : "https://api.testnet.minepi.com";
+
+  const server = new StellarSdk.Horizon.Server(horizonUrl);
+  const sourceAccount = await server.loadAccount(signerAddress);
+  const baseFee = await server.fetchBaseFee();
+
+  const tx = new StellarSdk.TransactionBuilder(sourceAccount, {
+    fee: String(baseFee),
+    networkPassphrase,
+  })
+    .addMemo(StellarSdk.Memo.text(paymentId))
+    .addOperation(
+      StellarSdk.Operation.payment({
+        destination: toAddress,
+        asset: StellarSdk.Asset.native(),
+        amount: amountNumber.toFixed(7),
+      }),
+    )
+    .setTimeout(180)
+    .build();
+
+  tx.sign(keypair);
+
+  const submitted = await server.submitTransaction(tx) as Record<string, unknown>;
+  const hash = String(submitted.hash || submitted.id || "").trim();
+  if (!hash) throw new Error("Pi blockchain submission did not return txid");
+  return hash;
 };
 
 serve(async (req) => {
@@ -153,6 +229,39 @@ serve(async (req) => {
       if (!memo) {
         return jsonResponse({ error: "Missing payment.memo" }, 400);
       }
+      if (!body.metadata || typeof body.metadata !== "object" || Array.isArray(body.metadata)) {
+        return jsonResponse({ error: "Missing payment.metadata object" }, 400);
+      }
+
+      // Pi allows one incomplete A2U payment at a time per app key.
+      const pendingResponse = await fetch("https://api.minepi.com/v2/payments/incomplete_server_payments", {
+        method: "GET",
+        headers: {
+          Authorization: `Key ${apiKey}`,
+        },
+      });
+      const pendingData = parseJson(await pendingResponse.text());
+      if (pendingResponse.ok) {
+        const pendingList = Array.isArray(pendingData.incomplete_server_payments)
+          ? pendingData.incomplete_server_payments
+          : [];
+        if (pendingList.length > 0) {
+          const pendingPayment = asRecord(pendingList[0]) as PiPaymentRecord;
+          const pendingUid = String(pendingPayment.user_uid || "").trim();
+          if (pendingUid && pendingUid !== uid) {
+            return jsonResponse(
+              { error: "Another incomplete A2U payout exists. Complete/cancel it before creating a new payout." },
+              409,
+            );
+          }
+
+          return jsonResponse({
+            success: true,
+            data: pendingPayment,
+            reusedIncomplete: true,
+          });
+        }
+      }
 
       const piResponse = await fetch("https://api.minepi.com/v2/payments", {
         method: "POST",
@@ -201,7 +310,41 @@ serve(async (req) => {
       endpoint = `${endpointBase}/approve`;
     } else if (action === "complete" || action === "payment_complete" || action === "a2u_complete") {
       endpoint = `${endpointBase}/complete`;
-      if (txid && typeof txid === "string") body = { txid };
+      const explicitTxid = typeof txid === "string" ? txid.trim() : "";
+      if (explicitTxid) {
+        body = { txid: explicitTxid };
+      } else if (action === "a2u_complete") {
+        const fetchPaymentResponse = await fetch(endpointBase, {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Key ${apiKey}`,
+          },
+        });
+        const fetchPaymentData = parseJson(await fetchPaymentResponse.text());
+        if (!fetchPaymentResponse.ok) {
+          const fallback = `Pi payment API call failed (status ${fetchPaymentResponse.status})`;
+          return jsonResponse(
+            { error: getPiErrorMessage(fetchPaymentData, fallback), status: fetchPaymentResponse.status, data: fetchPaymentData },
+            400,
+          );
+        }
+
+        const paymentData = fetchPaymentData as PiPaymentRecord;
+        const existingTxid = String(paymentData.transaction?.txid || "").trim();
+        if (existingTxid) {
+          body = { txid: existingTxid };
+        } else if (String(paymentData.direction || "").trim() === "app_to_user") {
+          const walletPrivateSeed = String(Deno.env.get("PI_WALLET_PRIVATE_SEED") || "").trim();
+          if (!walletPrivateSeed) {
+            return jsonResponse({ error: "PI_WALLET_PRIVATE_SEED is not configured" }, 500);
+          }
+
+          const walletPublicAddress = String(Deno.env.get("PI_WALLET_PUBLIC_ADDRESS") || "").trim();
+          const submittedTxid = await submitA2UTx(paymentData, walletPrivateSeed, walletPublicAddress);
+          body = { txid: submittedTxid };
+        }
+      }
     } else if (action === "cancel" || action === "payment_cancel" || action === "a2u_cancel") {
       endpoint = `${endpointBase}/cancel`;
     } else if (action === "get" || action === "payment_get" || action === "a2u_get") {
