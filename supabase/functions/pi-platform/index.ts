@@ -21,6 +21,25 @@ const parseJson = (raw: string) => {
   }
 };
 
+const getPiErrorMessage = (payload: Record<string, unknown>, fallback: string) => {
+  const directError = typeof payload.error === "string" ? payload.error.trim() : "";
+  if (directError) return directError;
+
+  const directMessage = typeof payload.message === "string" ? payload.message.trim() : "";
+  if (directMessage) return directMessage;
+
+  const nested = payload.data;
+  if (nested && typeof nested === "object" && !Array.isArray(nested)) {
+    const nestedRecord = nested as Record<string, unknown>;
+    const nestedError = typeof nestedRecord.error === "string" ? nestedRecord.error.trim() : "";
+    if (nestedError) return nestedError;
+    const nestedMessage = typeof nestedRecord.message === "string" ? nestedRecord.message.trim() : "";
+    if (nestedMessage) return nestedMessage;
+  }
+
+  return fallback;
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -146,7 +165,8 @@ serve(async (req) => {
 
       const data = parseJson(await piResponse.text());
       if (!piResponse.ok) {
-        return jsonResponse({ error: "Pi A2U create failed", status: piResponse.status, data }, 400);
+        const fallback = `Pi A2U create failed (status ${piResponse.status})`;
+        return jsonResponse({ error: getPiErrorMessage(data, fallback), status: piResponse.status, data }, 400);
       }
 
       return jsonResponse({ success: true, data });
@@ -202,7 +222,8 @@ serve(async (req) => {
 
     const data = parseJson(await piResponse.text());
     if (!piResponse.ok) {
-      return jsonResponse({ error: "Pi payment API call failed", status: piResponse.status, data }, 400);
+      const fallback = `Pi payment API call failed (status ${piResponse.status})`;
+      return jsonResponse({ error: getPiErrorMessage(data, fallback), status: piResponse.status, data }, 400);
     }
 
     return jsonResponse({ success: true, data });

@@ -39,7 +39,7 @@ const Contacts = () => {
           .from("profiles")
           .select("full_name, username, avatar_url")
           .eq("id", c.contact_id)
-          .single();
+          .maybeSingle();
         return {
           ...c,
           full_name: profile?.full_name || "Unknown",

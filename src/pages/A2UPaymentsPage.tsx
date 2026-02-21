@@ -78,7 +78,7 @@ const A2UPaymentsPage = () => {
       }
     };
     void boot();
-  }, []);
+  }, [navigate]);
 
   const handleRequestPayout = async () => {
     const {

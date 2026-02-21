@@ -62,14 +62,14 @@ const SendMoney = () => {
       if (!user) { navigate("/signin"); return; }
 
       const { data: wallet } = await supabase
-        .from("wallets").select("balance").eq("user_id", user.id).single();
+        .from("wallets").select("balance").eq("user_id", user.id).maybeSingle();
       setBalance(wallet?.balance || 0);
 
       const { data: myProfile } = await supabase
         .from("profiles")
         .select("full_name, avatar_url")
         .eq("id", user.id)
-        .single();
+        .maybeSingle();
       setMyAvatarUrl(myProfile?.avatar_url || null);
       setMyFullName(myProfile?.full_name || "");
 
@@ -271,7 +271,7 @@ const SendMoney = () => {
     }
 
     if (checkoutSessionToken && txId) {
-      const { error: completeError } = await (supabase as any).rpc("complete_merchant_checkout_with_transaction", {
+      const { error: completeError } = await supabase.rpc("complete_merchant_checkout_with_transaction", {
         p_session_token: checkoutSessionToken,
         p_transaction_id: txId,
         p_note: "Completed via OpenPay wallet /send flow",
@@ -281,7 +281,7 @@ const SendMoney = () => {
         p_customer_address: checkoutCustomerAddress || null,
       });
       if (completeError) {
-        const { error: fallbackCompleteError } = await (supabase as any).rpc("complete_merchant_checkout_with_transaction", {
+        const { error: fallbackCompleteError } = await supabase.rpc("complete_merchant_checkout_with_transaction", {
           p_session_token: checkoutSessionToken,
           p_transaction_id: txId,
           p_note: "Completed via OpenPay wallet /send flow",
