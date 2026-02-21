@@ -51,6 +51,11 @@ const A2UPaymentsPage = () => {
           supabase.auth.getUser(),
           callPiPlatform({ action: "a2u_config_status" }, "Failed to load A2U config status"),
         ]);
+        if (!userResult.user) {
+          toast.error("Please sign in first");
+          navigate("/auth");
+          return;
+        }
 
         const piUid = String(userResult.user?.user_metadata?.pi_uid || "").trim();
         const cachedPiUid = String(getAppCookie("openpay_last_pi_uid") || "").trim();
@@ -76,6 +81,15 @@ const A2UPaymentsPage = () => {
   }, []);
 
   const handleRequestPayout = async () => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      toast.error("Please sign in first");
+      navigate("/auth");
+      return;
+    }
+
     if (!receiverUid.trim()) {
       toast.error("Missing Pi UID. Authenticate with Pi first.");
       return;

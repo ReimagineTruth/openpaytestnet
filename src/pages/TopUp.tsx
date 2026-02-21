@@ -88,17 +88,15 @@ const TopUp = () => {
   }, [searchParams]);
 
   const initPi = () => {
-    const inPiBrowser =
-      typeof navigator !== "undefined" &&
-      /pi\s?browser/i.test(navigator.userAgent || "");
-    if (!window.Pi) {
+    if (!window.Pi || typeof window.Pi.init !== "function" || typeof window.Pi.authenticate !== "function") {
       return false;
     }
-    if (!inPiBrowser) {
+    try {
+      window.Pi.init({ version: "2.0", sandbox });
+      return true;
+    } catch {
       return false;
     }
-    window.Pi.init({ version: "2.0", sandbox });
-    return true;
   };
 
   const invokeTopUpAction = async (body: Record<string, unknown>, fallbackError: string) => {
@@ -119,6 +117,15 @@ const TopUp = () => {
   };
 
   const handleTopUp = async () => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      toast.error("Please sign in first");
+      navigate("/auth");
+      return;
+    }
+
     if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
       toast.error("Enter a valid amount");
       return;

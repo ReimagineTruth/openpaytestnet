@@ -48,19 +48,17 @@ const PiAuthPage = () => {
   };
 
   const initPi = () => {
-    const inPiBrowser =
-      typeof navigator !== "undefined" &&
-      /pi\s?browser/i.test(navigator.userAgent || "");
-    if (!window.Pi) {
+    if (!window.Pi || typeof window.Pi.init !== "function" || typeof window.Pi.authenticate !== "function") {
       toast.error("Pi SDK not loaded");
       return false;
     }
-    if (!inPiBrowser) {
-      toast.error("Open this page in Pi Browser to continue");
+    try {
+      window.Pi.init({ version: "2.0", sandbox });
+      return true;
+    } catch {
+      toast.error("Pi SDK failed to initialize. Please reopen in Pi Browser.");
       return false;
     }
-    window.Pi.init({ version: "2.0", sandbox });
-    return true;
   };
 
   useEffect(() => {
@@ -299,10 +297,10 @@ const PiAuthPage = () => {
             )}
             <Button
               onClick={handlePiAuth}
-              disabled={busyAuth}
+              disabled={busyAuth || !sdkReady}
               className="mt-3 h-11 w-full rounded-2xl bg-paypal-blue text-white hover:bg-[#004dc5]"
             >
-              {busyAuth ? "Authenticating..." : "Authenticate with Pi"}
+              {busyAuth ? "Authenticating..." : sdkReady ? "Authenticate with Pi" : "Open in Pi Browser"}
             </Button>
             <Button
               asChild
